@@ -8,6 +8,35 @@ import {
   RotateCcw 
 } from 'lucide-react';
 
+const landmarkSteps: Array<{ key: keyof Landmarks; label: string; hint: string }> = [
+  { key: 'takeoff', label: 'Off the Ground', hint: 'First frame with no floor contact' },
+  { key: 'hit', label: 'Hit', hint: 'Ball contact at peak extension' },
+  { key: 'landing', label: 'On the Ground', hint: 'First frame back on the floor' },
+];
+
+const homeHighlights = [
+  {
+    title: 'Focused review flow',
+    description: 'A simple three-mark workflow keeps every clip readable and consistent.',
+  },
+  {
+    title: 'Frame-level control',
+    description: 'Use coarse and fine scrubbing to land exactly on takeoff, contact, and landing.',
+  },
+  {
+    title: 'Instant timing feedback',
+    description: 'See airtime, strike timing, and overall accuracy as soon as the clip is marked.',
+  },
+];
+
+const uploadTips = [
+  'Keep the full approach, jump, and landing inside the frame.',
+  'Use a side or slight diagonal angle so the jump arc is easy to read.',
+  'Avoid shaky clips and slow pans during the jump.',
+];
+
+const formatTime = (time: number | null) => (time === null ? '--' : `${time.toFixed(3)}s`);
+
 function App() {
   const [view, setView] = useState<View>('home');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -20,12 +49,26 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const resetLandmarks = () => {
+    setLandmarks({ takeoff: null, hit: null, landing: null });
+    setIsPlaying(false);
+  };
+
+  const undoLastLandmark = () => {
+    setLandmarks((prev) => {
+      if (prev.landing !== null) return { ...prev, landing: null };
+      if (prev.hit !== null) return { ...prev, hit: null };
+      if (prev.takeoff !== null) return { ...prev, takeoff: null };
+      return prev;
+    });
+  };
+
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
-      setLandmarks({ takeoff: null, hit: null, landing: null });
+      resetLandmarks();
     }
   };
 
@@ -88,138 +131,315 @@ function App() {
   };
 
   const results = calculateResults();
+  const completedLandmarks = landmarkSteps.filter(({ key }) => landmarks[key] !== null).length;
+  const allLandmarksMarked = completedLandmarks === landmarkSteps.length;
+  const statusMessage =
+    !landmarks.takeoff
+      ? 'Step 1: mark the instant your feet leave the ground.'
+      : !landmarks.hit
+        ? 'Step 2: mark the exact frame where the ball is contacted.'
+        : !landmarks.landing
+          ? 'Step 3: mark the first frame back on the ground.'
+          : 'All landmarks captured. Your report is ready.';
+  const resultMetrics = results
+    ? [
+        {
+          label: 'Total Airtime',
+          value: `${results.airtime.toFixed(3)}s`,
+          hint: 'Time between takeoff and landing',
+        },
+        {
+          label: 'Ideal Contact Point',
+          value: `${results.idealRelativeHit.toFixed(3)}s`,
+          hint: 'Midpoint after takeoff',
+        },
+        {
+          label: 'Actual Contact Point',
+          value: `${results.actualRelativeHit.toFixed(3)}s`,
+          hint: 'Measured from takeoff',
+        },
+      ]
+    : [];
 
   if (view === 'home') {
     return (
-      <div className="card">
-        <h1>Volleyball Spiking Tracker</h1>
-        <p>Upload a video to track and analyze your spiking timing.</p>
-        <button onClick={() => setView('tracking')}>Start Tracking</button>
+      <div className="app-shell">
+        <div className="home-grid">
+          <section className="card card--home hero-panel">
+            <p className="eyebrow">Spike timing analysis</p>
+            <h1>Professional jump timing review for every rep.</h1>
+            <p className="intro-text">
+              Upload one clip, move frame by frame, and mark the exact moments that define an explosive, well-timed spike.
+            </p>
+
+            <div className="hero-actions">
+              <button className="primary-button hero-button" onClick={() => setView('tracking')}>
+                Start Tracking
+              </button>
+            </div>
+
+            <div className="hero-stats">
+              <div className="hero-stat">
+                <strong>3 landmarks</strong>
+                <span>Takeoff, contact, landing</span>
+              </div>
+              <div className="hero-stat">
+                <strong>Frame control</strong>
+                <span>Fine and coarse clip navigation</span>
+              </div>
+              <div className="hero-stat">
+                <strong>Instant report</strong>
+                <span>Accuracy, airtime, and strike point</span>
+              </div>
+            </div>
+          </section>
+
+          <aside className="card card--side">
+            <p className="eyebrow eyebrow--subtle">What you get</p>
+            <div className="feature-list">
+              {homeHighlights.map((feature, index) => (
+                <div key={feature.title} className="feature-card">
+                  <span className="feature-index">{`0${index + 1}`}</span>
+                  <div>
+                    <h3>{feature.title}</h3>
+                    <p>{feature.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
       </div>
     );
   }
 
   if (view === 'tracking') {
     return (
-      <div className="card">
-        <h2>Tracking Page</h2>
-        {!videoUrl ? (
-          <div className="upload-section">
-            <input type="file" accept="video/*" onChange={handleVideoUpload} id="video-upload" style={{ display: 'none' }} />
-            <label htmlFor="video-upload" style={{ cursor: 'pointer', padding: '1em 2em', background: '#333', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <Upload size={20} /> Upload Video
-            </label>
+      <div className="app-shell">
+        <div className="card card--tracking">
+          <div className="section-heading">
+            <p className="eyebrow">Review your jump</p>
+            <h2>Tracking Page</h2>
+            <p className="section-description">
+              Upload a clean clip, then mark takeoff, contact, and landing in sequence for a precise timing report.
+            </p>
           </div>
-        ) : (
-          <div>
-            <div className="video-container">
-              <video 
-                ref={videoRef} 
-                src={videoUrl} 
-                onPlay={() => setIsPlaying(true)} 
-                onPause={() => setIsPlaying(false)} 
-              />
-            </div>
-            
-            <div className="button-group">
-              <button onClick={() => skipTime(-0.2)} title="-0.2s"><Rewind size={20} /> -0.2s</button>
-              <button onClick={() => skipFrame(-1)} title="-1 frame"><ChevronLeft size={20} /> -1 Frame</button>
-              <button onClick={togglePlay}>
-                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-              </button>
-              <button onClick={() => skipFrame(1)} title="+1 frame"><ChevronRight size={20} /> +1 Frame</button>
-              <button onClick={() => skipTime(0.2)} title="+0.2s"><FastForward size={20} /> +0.2s</button>
-            </div>
+          {!videoUrl ? (
+            <div className="empty-grid">
+              <section className="panel panel--upload">
+                <p className="panel-kicker">Step 1</p>
+                <h3>Bring in a clean spike clip</h3>
+                <p className="panel-copy">
+                  Choose a video that shows the full jump cycle from approach through landing.
+                </p>
+                <div className="upload-section">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoUpload}
+                    id="video-upload"
+                    className="visually-hidden"
+                  />
+                  <label htmlFor="video-upload" className="upload-trigger">
+                    <Upload size={20} /> Upload Video
+                  </label>
+                </div>
+              </section>
 
-            <div className="status-message" style={{ margin: '20px 0', fontSize: '1.2em', fontWeight: 'bold' }}>
-              {!landmarks.takeoff && "Step 1: Tap when Off the Ground"}
-              {landmarks.takeoff && !landmarks.hit && "Step 2: Tap when Hit"}
-              {landmarks.takeoff && landmarks.hit && !landmarks.landing && "Step 3: Tap when On the Ground"}
-              {landmarks.takeoff && landmarks.hit && landmarks.landing && "All landmarks marked!"}
+              <section className="panel">
+                <p className="panel-kicker">Best results</p>
+                <h3>Capture a readable angle</h3>
+                <ul className="tip-list">
+                  {uploadTips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+              </section>
             </div>
+          ) : (
+            <div className="tracking-workspace">
+              <section className="panel stage-panel">
+                <div className="panel-header panel-header--spread">
+                  <div>
+                    <p className="panel-kicker">Video review</p>
+                    <h3>Playback canvas</h3>
+                  </div>
+                  <span className={`live-pill ${isPlaying ? 'live-pill--active' : ''}`}>
+                    {isPlaying ? 'Playing' : 'Paused'}
+                  </span>
+                </div>
 
-            <div className="button-group">
-              <button 
-                onClick={() => {
-                  if (!landmarks.takeoff) markLandmark('takeoff');
-                  else if (!landmarks.hit) markLandmark('hit');
-                  else if (!landmarks.landing) markLandmark('landing');
-                }}
-                disabled={!!(landmarks.takeoff && landmarks.hit && landmarks.landing)}
-                style={{ 
-                  padding: '1.5em 8em', 
-                  fontSize: '1.5em', 
-                  fontWeight: 'bold',
-                  background: '#646cff', 
-                  color: 'white',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                  minWidth: '300px'
-                }}
-              >
-                Tap
-              </button>
+                <div className="video-container">
+                  <video
+                    className="tracking-video"
+                    ref={videoRef}
+                    src={videoUrl}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                  />
+                </div>
+
+                <div className="stage-footer">
+                  <span>Precision playback enabled</span>
+                  <span>{allLandmarksMarked ? 'Ready for analysis' : `${completedLandmarks}/3 landmarks captured`}</span>
+                </div>
+              </section>
+
+              <aside className="tracking-sidebar">
+                <section className="panel">
+                  <p className="panel-kicker">Playback controls</p>
+                  <h3>Navigate the clip</h3>
+                  <div className="button-group transport-controls">
+                    <button onClick={() => skipTime(-0.2)} title="-0.2s">
+                      <Rewind size={20} /> -0.2s
+                    </button>
+                    <button onClick={() => skipFrame(-1)} title="-1 frame">
+                      <ChevronLeft size={20} /> -1 Frame
+                    </button>
+                    <button onClick={togglePlay} className="accent-button">
+                      {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                    </button>
+                    <button onClick={() => skipFrame(1)} title="+1 frame">
+                      <ChevronRight size={20} /> +1 Frame
+                    </button>
+                    <button onClick={() => skipTime(0.2)} title="+0.2s">
+                      <FastForward size={20} /> +0.2s
+                    </button>
+                  </div>
+                </section>
+
+                <section className="panel panel--mark">
+                  <p className="panel-kicker">Landmark capture</p>
+                  <h3>Mark the current frame</h3>
+                  <div className="status-message">{statusMessage}</div>
+
+                  <div className="button-group mark-controls">
+                    <button
+                      className="tap-button"
+                      onClick={() => {
+                        if (!landmarks.takeoff) markLandmark('takeoff');
+                        else if (!landmarks.hit) markLandmark('hit');
+                        else if (!landmarks.landing) markLandmark('landing');
+                      }}
+                      disabled={allLandmarksMarked}
+                    >
+                      Tap
+                    </button>
+                    <button
+                      className="secondary-button undo-button"
+                      onClick={undoLastLandmark}
+                      disabled={completedLandmarks === 0}
+                    >
+                      <RotateCcw size={18} /> Undo Last Mark
+                    </button>
+                  </div>
+
+                  <p className="panel-note">
+                    Use the frame controls until the action matches the prompt above, then capture the moment with one tap.
+                  </p>
+                </section>
+
+                <section className="panel">
+                  <p className="panel-kicker">Captured timeline</p>
+                  <h3>Current landmarks</h3>
+                  <div className="landmark-grid">
+                    {landmarkSteps.map((step) => (
+                      <div
+                        key={step.key}
+                        className={`landmark-card ${landmarks[step.key] !== null ? 'landmark-card--filled' : ''}`}
+                      >
+                        <span className="landmark-label">{step.label}</span>
+                        <strong>{formatTime(landmarks[step.key])}</strong>
+                        <span className="landmark-hint">{step.hint}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <div className="button-group action-controls">
+                  <button
+                    className="primary-button"
+                    onClick={() => setView('results')}
+                    disabled={!allLandmarksMarked}
+                  >
+                    Analyze
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setVideoUrl(null);
+                      resetLandmarks();
+                    }}
+                  >
+                    Upload New Video
+                  </button>
+                </div>
+              </aside>
             </div>
-
-            <table className="landmark-table">
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Time (s)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Off the Ground</td><td>{landmarks.takeoff?.toFixed(3) || '-'}</td></tr>
-                <tr><td>Hit</td><td>{landmarks.hit?.toFixed(3) || '-'}</td></tr>
-                <tr><td>On the Ground</td><td>{landmarks.landing?.toFixed(3) || '-'}</td></tr>
-              </tbody>
-            </table>
-
-            <div className="button-group" style={{marginTop: '30px'}}>
-              <button 
-                onClick={() => setView('results')} 
-                disabled={landmarks.takeoff === null || landmarks.hit === null || landmarks.landing === null}
-                style={{ background: '#646cff', color: 'white', padding: '1em 2em' }}
-              >
-                Analyze
-              </button>
-              <button onClick={() => { setVideoUrl(null); setLandmarks({ takeoff: null, hit: null, landing: null }); }}>
-                Upload New Video
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   if (view === 'results' && results) {
     return (
-      <div className="card">
-        <div className={`grade-banner ${results.gradeClass}`}>
-          {results.grade}
-        </div>
-        <div className="difference-text">
-          {results.diff > 0 ? `+${results.diff.toFixed(3)}s` : `${results.diff.toFixed(3)}s`} from ideal
-        </div>
+      <div className="app-shell">
+        <div className="card card--results">
+          <div className="results-header">
+            <div className="results-summary">
+              <p className="eyebrow">Timing report</p>
+              <div className={`grade-banner ${results.gradeClass}`}>
+                {results.grade}
+              </div>
+              <div className="difference-text">
+                {results.diff > 0 ? `+${results.diff.toFixed(3)}s` : `${results.diff.toFixed(3)}s`} from ideal
+              </div>
+            </div>
 
-        <div className="results-view">
-          <div className="accuracy-text">Accuracy: {results.accuracy.toFixed(1)}%</div>
-          
-          <div style={{ textAlign: 'left', marginTop: '20px' }}>
-            <p><strong>Total Airtime:</strong> {results.airtime.toFixed(3)}s</p>
-            <p><strong>Ideal Contact Point:</strong> {results.idealRelativeHit.toFixed(3)}s (after takeoff)</p>
-            <p><strong>Actual Contact Point:</strong> {results.actualRelativeHit.toFixed(3)}s (after takeoff)</p>
+            <div className="accuracy-orb">
+              <span>Accuracy</span>
+              <strong>{results.accuracy.toFixed(1)}%</strong>
+            </div>
           </div>
-        </div>
 
-        <div className="button-group" style={{marginTop: '30px'}}>
-          <button onClick={() => setView('tracking')}>
-            <RotateCcw size={20} /> Try Again
-          </button>
-          <button onClick={() => { setView('tracking'); setVideoUrl(null); setLandmarks({ takeoff: null, hit: null, landing: null }); }}>
-            <Upload size={20} /> Upload New Video
-          </button>
+          <div className="results-view">
+            <div className="results-metric-grid">
+              {resultMetrics.map((metric) => (
+                <div key={metric.label} className="metric-card">
+                  <span>{metric.label}</span>
+                  <strong>{metric.value}</strong>
+                  <p>{metric.hint}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="results-note">
+              The ideal strike point sits halfway between takeoff and landing. Smaller offsets mean cleaner timing.
+            </div>
+          </div>
+
+          <div className="button-group action-controls">
+            <button
+              className="secondary-button"
+              onClick={() => {
+                resetLandmarks();
+                setView('tracking');
+              }}
+            >
+              <RotateCcw size={20} /> Try Again
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => {
+                setView('tracking');
+                setVideoUrl(null);
+                resetLandmarks();
+              }}
+            >
+              <Upload size={20} /> Upload New Video
+            </button>
+          </div>
         </div>
       </div>
     );
