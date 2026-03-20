@@ -45,7 +45,14 @@ function App() {
 
   const markLandmark = (type: keyof Landmarks) => {
     if (videoRef.current) {
-      setLandmarks(prev => ({ ...prev, [type]: videoRef.current!.currentTime }));
+      const currentTime = videoRef.current.currentTime;
+      // Prevent marking the same time for different landmarks
+      const times = Object.values(landmarks).filter(t => t !== null);
+      if (times.includes(currentTime)) {
+        alert("Please move to a different frame to mark the next landmark.");
+        return;
+      }
+      setLandmarks(prev => ({ ...prev, [type]: currentTime }));
     }
   };
 
@@ -124,15 +131,33 @@ function App() {
               <button onClick={() => skipTime(0.2)} title="+0.2s"><FastForward size={20} /> +0.2s</button>
             </div>
 
+            <div className="status-message" style={{ margin: '20px 0', fontSize: '1.2em', fontWeight: 'bold' }}>
+              {!landmarks.takeoff && "Step 1: Tap when Off the Ground"}
+              {landmarks.takeoff && !landmarks.hit && "Step 2: Tap when Hit"}
+              {landmarks.takeoff && landmarks.hit && !landmarks.landing && "Step 3: Tap when On the Ground"}
+              {landmarks.takeoff && landmarks.hit && landmarks.landing && "All landmarks marked!"}
+            </div>
+
             <div className="button-group">
-              <button onClick={() => markLandmark('takeoff')} style={{borderColor: landmarks.takeoff !== null ? '#4caf50' : 'transparent'}}>
-                Off the Ground
-              </button>
-              <button onClick={() => markLandmark('hit')} style={{borderColor: landmarks.hit !== null ? '#4caf50' : 'transparent'}}>
-                Hit
-              </button>
-              <button onClick={() => markLandmark('landing')} style={{borderColor: landmarks.landing !== null ? '#4caf50' : 'transparent'}}>
-                On the Ground
+              <button 
+                onClick={() => {
+                  if (!landmarks.takeoff) markLandmark('takeoff');
+                  else if (!landmarks.hit) markLandmark('hit');
+                  else if (!landmarks.landing) markLandmark('landing');
+                }}
+                disabled={!!(landmarks.takeoff && landmarks.hit && landmarks.landing)}
+                style={{ 
+                  padding: '1.5em 8em', 
+                  fontSize: '1.5em', 
+                  fontWeight: 'bold',
+                  background: '#646cff', 
+                  color: 'white',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                  minWidth: '300px'
+                }}
+              >
+                Tap
               </button>
             </div>
 
