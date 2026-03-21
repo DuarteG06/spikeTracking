@@ -284,6 +284,10 @@ function App() {
                     src={videoUrl}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
+                    playsInline
+                    webkit-playsinline="true"
+                    preload="auto"
+                    muted
                   />
                 </div>
 
