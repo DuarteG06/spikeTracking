@@ -48,6 +48,7 @@ function App() {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fps, setFps] = useState(30);
 
   const resetLandmarks = () => {
     setLandmarks({ takeoff: null, hit: null, landing: null });
@@ -63,11 +64,40 @@ function App() {
     });
   };
 
+  const detectFrameRate = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // To detect FPS, we seek forward slightly. 
+    // The browser snaps currentTime to the next frame boundary.
+    const originalTime = video.currentTime;
+    
+    const onSeeked = () => {
+      const frameDuration = video.currentTime - originalTime;
+      if (frameDuration > 0) {
+        const detectedFps = 1 / frameDuration;
+        // Snap to common production framerates for reliability
+        const commonRates = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120, 240];
+        const snappedFps = commonRates.reduce((prev, curr) => 
+          Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev
+        );
+        setFps(snappedFps);
+      }
+      video.removeEventListener('seeked', onSeeked);
+      video.currentTime = originalTime;
+    };
+
+    video.addEventListener('seeked', onSeeked);
+    // Seek by a value small enough to land on the very next frame even at 240fps
+    video.currentTime += 0.001; 
+  };
+
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
+      setFps(30); // Reset to default until detected
       resetLandmarks();
     }
   };
@@ -80,8 +110,7 @@ function App() {
 
   const skipFrame = (direction: number) => {
     if (videoRef.current) {
-      // Assuming 30fps as default
-      const frameDuration = 1 / 30;
+      const frameDuration = 1 / fps;
       videoRef.current.currentTime += direction * frameDuration;
     }
   };
@@ -282,6 +311,7 @@ function App() {
                     className="tracking-video"
                     ref={videoRef}
                     src={videoUrl}
+                    onLoadedData={detectFrameRate}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     playsInline
