@@ -288,6 +288,8 @@ function App() {
                     webkit-playsinline="true"
                     preload="auto"
                     muted
+                    disablePictureInPicture
+                    disableRemotePlayback
                   />
                 </div>
 
