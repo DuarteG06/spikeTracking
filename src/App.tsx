@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './App.css';
 import type { Landmarks, View } from './types';
 import { 
@@ -50,6 +50,13 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [fps, setFps] = useState(30);
 
+  // Effect to ensure video element is properly initialized when URL changes
+  useEffect(() => {
+    if (videoUrl && videoRef.current) {
+      videoRef.current.load();
+    }
+  }, [videoUrl]);
+
   const resetLandmarks = () => {
     setLandmarks({ takeoff: null, hit: null, landing: null });
     setIsPlaying(false);
@@ -66,22 +73,20 @@ function App() {
 
   const detectFrameRate = () => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return;
+    if (!video || video.readyState < 1) return;
 
-    // We'll use a slightly more aggressive detection for the initial guess
     const originalTime = video.currentTime;
     
     const onSeeked = () => {
       video.removeEventListener('seeked', onSeeked);
       const diff = video.currentTime - originalTime;
       
-      if (diff > 0 && diff < 0.1) {
+      if (diff > 0 && diff < 0.15) {
         const detectedFps = 1 / diff;
         const commonRates = [24, 25, 30, 50, 60, 120, 240];
         const snappedFps = commonRates.reduce((prev, curr) => 
           Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev
         );
-        // Only set if it looks realistic, otherwise default to 30
         if (snappedFps >= 24 && snappedFps <= 240) {
           setFps(snappedFps);
         }
@@ -90,8 +95,19 @@ function App() {
     };
 
     video.addEventListener('seeked', onSeeked);
-    // Move 100ms - browsers that snap will land on a frame boundary
+    // Seek 100ms - if the browser snaps, it will land on a frame boundary
     video.currentTime += 0.1;
+  };
+
+  const handleVideoMetadata = () => {
+    const video = videoRef.current;
+    if (video) {
+      // Force seek to a tiny value to render the first frame on mobile
+      if (video.currentTime === 0) {
+        video.currentTime = 0.001;
+      }
+      detectFrameRate();
+    }
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,19 +122,38 @@ function App() {
 
   const skipTime = (seconds: number) => {
     const video = videoRef.current;
-    if (video && video.readyState >= 1) { // HAVE_METADATA
-      const newTime = video.currentTime + seconds;
-      video.currentTime = Math.max(0, Math.min(video.duration || 0, newTime));
+    if (video) {
+      // iOS sometimes reports readyState 0 if it hasn't buffered yet, 
+      // but we can still try to seek if the metadata is loaded
+      const current = video.currentTime;
+      const duration = video.duration;
+      let newTime = current + seconds;
+      
+      if (!isNaN(duration) && duration !== Infinity) {
+        newTime = Math.max(0, Math.min(duration, newTime));
+      } else {
+        newTime = Math.max(0, newTime);
+      }
+      
+      video.currentTime = newTime;
     }
   };
 
   const skipFrame = (direction: number) => {
     const video = videoRef.current;
-    if (video && video.readyState >= 1) {
-      // 1.1 multiplier ensures we definitely cross the frame boundary on high-precision browsers
-      const frameDuration = (1 / fps) * 1.1;
-      const newTime = video.currentTime + (direction * frameDuration);
-      video.currentTime = Math.max(0, Math.min(video.duration || 0, newTime));
+    if (video) {
+      const frameDuration = (1 / fps) * 1.1; // 1.1x multiplier ensures we cross the frame threshold
+      const current = video.currentTime;
+      const duration = video.duration;
+      let newTime = current + (direction * frameDuration);
+      
+      if (!isNaN(duration) && duration !== Infinity) {
+        newTime = Math.max(0, Math.min(duration, newTime));
+      } else {
+        newTime = Math.max(0, newTime);
+      }
+      
+      video.currentTime = newTime;
     }
   };
 
@@ -137,7 +172,15 @@ function App() {
   const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
+      else {
+        // iOS requires user interaction to play, this is handled by the click
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            // Handle auto-play prevention if needed
+          });
+        }
+      }
       setIsPlaying(!isPlaying);
     }
   };
@@ -315,7 +358,7 @@ function App() {
                     className="tracking-video"
                     ref={videoRef}
                     src={videoUrl}
-                    onLoadedData={detectFrameRate}
+                    onLoadedMetadata={handleVideoMetadata}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     playsInline
