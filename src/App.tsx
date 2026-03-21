@@ -319,7 +319,6 @@ function App() {
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     playsInline
-                    webkitPlaysInline
                     preload="auto"
                     muted
                     disablePictureInPicture
