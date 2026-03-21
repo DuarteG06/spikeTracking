@@ -66,7 +66,7 @@ function App() {
 
   const detectFrameRate = () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || video.readyState < 2) return;
 
     // We'll use a slightly more aggressive detection for the initial guess
     const originalTime = video.currentTime;
@@ -105,17 +105,20 @@ function App() {
   };
 
   const skipTime = (seconds: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime += seconds;
+    const video = videoRef.current;
+    if (video && video.readyState >= 1) { // HAVE_METADATA
+      const newTime = video.currentTime + seconds;
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, newTime));
     }
   };
 
   const skipFrame = (direction: number) => {
-    if (videoRef.current) {
-      // Use a slightly larger step than exactly 1/fps to ensure we cross the boundary
-      // 1.1 frames is a safe "nudge" that always lands on the next frame
+    const video = videoRef.current;
+    if (video && video.readyState >= 1) {
+      // 1.1 multiplier ensures we definitely cross the frame boundary on high-precision browsers
       const frameDuration = (1 / fps) * 1.1;
-      videoRef.current.currentTime += direction * frameDuration;
+      const newTime = video.currentTime + (direction * frameDuration);
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, newTime));
     }
   };
 
@@ -316,7 +319,7 @@ function App() {
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     playsInline
-                    webkit-playsinline="true"
+                    webkitPlaysInline
                     preload="auto"
                     muted
                     disablePictureInPicture
