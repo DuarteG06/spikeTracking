@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, 
   FastForward, Rewind, 
   Upload, Play, Pause, 
-  RotateCcw 
+  RotateCcw, Activity
 } from 'lucide-react';
 
 const landmarkSteps: Array<{ key: keyof Landmarks; label: string; hint: string }> = [
@@ -68,28 +68,30 @@ function App() {
     const video = videoRef.current;
     if (!video) return;
 
-    // To detect FPS, we seek forward slightly. 
-    // The browser snaps currentTime to the next frame boundary.
+    // We'll use a slightly more aggressive detection for the initial guess
     const originalTime = video.currentTime;
     
     const onSeeked = () => {
-      const frameDuration = video.currentTime - originalTime;
-      if (frameDuration > 0) {
-        const detectedFps = 1 / frameDuration;
-        // Snap to common production framerates for reliability
-        const commonRates = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120, 240];
+      video.removeEventListener('seeked', onSeeked);
+      const diff = video.currentTime - originalTime;
+      
+      if (diff > 0 && diff < 0.1) {
+        const detectedFps = 1 / diff;
+        const commonRates = [24, 25, 30, 50, 60, 120, 240];
         const snappedFps = commonRates.reduce((prev, curr) => 
           Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev
         );
-        setFps(snappedFps);
+        // Only set if it looks realistic, otherwise default to 30
+        if (snappedFps >= 24 && snappedFps <= 240) {
+          setFps(snappedFps);
+        }
       }
-      video.removeEventListener('seeked', onSeeked);
       video.currentTime = originalTime;
     };
 
     video.addEventListener('seeked', onSeeked);
-    // Seek by a value small enough to land on the very next frame even at 240fps
-    video.currentTime += 0.001; 
+    // Move 100ms - browsers that snap will land on a frame boundary
+    video.currentTime += 0.1;
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,7 +99,7 @@ function App() {
     if (file) {
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
-      setFps(30); // Reset to default until detected
+      setFps(30); 
       resetLandmarks();
     }
   };
@@ -110,7 +112,9 @@ function App() {
 
   const skipFrame = (direction: number) => {
     if (videoRef.current) {
-      const frameDuration = 1 / fps;
+      // Use a slightly larger step than exactly 1/fps to ensure we cross the boundary
+      // 1.1 frames is a safe "nudge" that always lands on the next frame
+      const frameDuration = (1 / fps) * 1.1;
       videoRef.current.currentTime += direction * frameDuration;
     }
   };
@@ -118,7 +122,6 @@ function App() {
   const markLandmark = (type: keyof Landmarks) => {
     if (videoRef.current) {
       const currentTime = videoRef.current.currentTime;
-      // Prevent marking the same time for different landmarks
       const times = Object.values(landmarks).filter(t => t !== null);
       if (times.includes(currentTime)) {
         alert("Please move to a different frame to mark the next landmark.");
@@ -147,8 +150,6 @@ function App() {
     const actualRelativeHit = landmarks.hit - landmarks.takeoff;
     const diff = actualRelativeHit - idealRelativeHit;
     
-    // Accuracy Calculation
-    // We normalize error relative to the half-airtime
     const maxError = airtime / 2;
     const errorRatio = Math.abs(diff) / maxError;
     const accuracy = Math.max(0, 100 * (1 - errorRatio));
@@ -324,7 +325,10 @@ function App() {
                 </div>
 
                 <div className="stage-footer">
-                  <span>Precision playback enabled</span>
+                  <div className="fps-indicator">
+                    <Activity size={14} />
+                    <span>{fps} FPS</span>
+                  </div>
                   <span>{allLandmarksMarked ? 'Ready for analysis' : `${completedLandmarks}/3 landmarks captured`}</span>
                 </div>
               </section>
@@ -332,7 +336,21 @@ function App() {
               <aside className="tracking-sidebar">
                 <section className="panel">
                   <p className="panel-kicker">Playback controls</p>
-                  <h3>Navigate the clip</h3>
+                  <div className="panel-header--spread">
+                    <h3>Navigation</h3>
+                    <select 
+                      className="fps-select" 
+                      value={fps} 
+                      onChange={(e) => setFps(Number(e.target.value))}
+                      title="Set video framerate for frame-by-frame control"
+                    >
+                      <option value={24}>24 FPS</option>
+                      <option value={30}>30 FPS</option>
+                      <option value={60}>60 FPS</option>
+                      <option value={120}>120 FPS</option>
+                      <option value={240}>240 FPS</option>
+                    </select>
+                  </div>
                   <div className="button-group transport-controls">
                     <button onClick={() => skipTime(-0.2)} title="-0.2s">
                       <Rewind size={20} /> -0.2s
