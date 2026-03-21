@@ -111,6 +111,9 @@ function App() {
     if (landmarks.takeoff === null || landmarks.hit === null || landmarks.landing === null) return null;
     
     const airtime = landmarks.landing - landmarks.takeoff;
+    const jumpHeight = (9.81 * Math.pow(airtime, 2)) / 8; // Height in meters
+    const jumpHeightCm = jumpHeight * 100; // Height in cm
+
     const idealRelativeHit = airtime / 2;
     const actualRelativeHit = landmarks.hit - landmarks.takeoff;
     const diff = actualRelativeHit - idealRelativeHit;
@@ -127,7 +130,7 @@ function App() {
     else if (accuracy >= 85) { grade = "Great"; gradeClass = "great"; }
     else if (accuracy >= 75) { grade = "Good"; gradeClass = "good"; }
 
-    return { airtime, idealRelativeHit, actualRelativeHit, diff, accuracy, grade, gradeClass };
+    return { airtime, jumpHeightCm, idealRelativeHit, actualRelativeHit, diff, accuracy, grade, gradeClass };
   };
 
   const results = calculateResults();
@@ -147,6 +150,11 @@ function App() {
           label: 'Total Airtime',
           value: `${results.airtime.toFixed(3)}s`,
           hint: 'Time between takeoff and landing',
+        },
+        {
+          label: 'Jump Height',
+          value: `${results.jumpHeightCm.toFixed(1)}cm`,
+          hint: 'Estimated vertical leap',
         },
         {
           label: 'Ideal Contact Point',
@@ -189,7 +197,7 @@ function App() {
               </div>
               <div className="hero-stat">
                 <strong>Instant report</strong>
-                <span>Accuracy, airtime, and strike point</span>
+                <span>Accuracy, jump height, and timing</span>
               </div>
             </div>
           </section>
