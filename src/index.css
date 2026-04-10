@@ -3,18 +3,19 @@
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;
-  color: #e6edf6;
+  color: #edf3fb;
   background:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.14), transparent 26%),
-    linear-gradient(160deg, #07111f 0%, #0b1526 48%, #050a13 100%);
-  --accent: #57d4ff;
-  --accent-strong: #198cff;
-  --accent-warm: #f59e0b;
-  --text-strong: #f8fbff;
-  --text-muted: #a8b6ca;
-  --text-soft: #7c8ca5;
-  --border-soft: rgba(148, 163, 184, 0.18);
-  --shadow-lg: 0 34px 80px rgba(2, 8, 18, 0.45);
+    radial-gradient(circle at top, rgba(49, 130, 246, 0.16), transparent 30%),
+    linear-gradient(180deg, #08101d 0%, #0d1626 45%, #060b14 100%);
+  --accent: #60a5fa;
+  --accent-strong: #2f7fe9;
+  --text-strong: #edf3fb;
+  --text-muted: #94a3b8;
+  --text-soft: #6f8199;
+  --surface: rgba(10, 18, 31, 0.92);
+  --surface-muted: rgba(15, 23, 38, 0.92);
+  --border-soft: rgba(148, 163, 184, 0.16);
+  --shadow-md: 0 24px 60px rgba(2, 8, 18, 0.28);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -35,6 +36,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: inherit;
+  color: var(--text-strong);
   overflow-x: hidden;
 }
 

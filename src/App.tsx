@@ -1,41 +1,38 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import type { Landmarks, View } from './types';
-import { 
-  ChevronLeft, ChevronRight, 
-  FastForward, Rewind, 
-  Upload, Play, Pause, 
-  RotateCcw, Activity
+import {
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+  FastForward,
+  Pause,
+  Play,
+  Rewind,
+  RotateCcw,
+  Upload,
 } from 'lucide-react';
 
 const landmarkSteps: Array<{ key: keyof Landmarks; label: string; hint: string }> = [
-  { key: 'takeoff', label: 'Off the Ground', hint: 'First frame with no floor contact' },
-  { key: 'hit', label: 'Hit', hint: 'Ball contact at peak extension' },
-  { key: 'landing', label: 'On the Ground', hint: 'First frame back on the floor' },
-];
-
-const homeHighlights = [
-  {
-    title: 'Focused review flow',
-    description: 'A simple three-mark workflow keeps every clip readable and consistent.',
-  },
-  {
-    title: 'Frame-level control',
-    description: 'Use coarse and fine scrubbing to land exactly on takeoff, contact, and landing.',
-  },
-  {
-    title: 'Instant timing feedback',
-    description: 'See airtime, strike timing, and overall accuracy as soon as the clip is marked.',
-  },
+  { key: 'takeoff', label: 'Takeoff', hint: 'First frame with both feet off the floor' },
+  { key: 'hit', label: 'Contact', hint: 'Frame where the hand meets the ball' },
+  { key: 'landing', label: 'Landing', hint: 'First frame back on the floor' },
 ];
 
 const uploadTips = [
-  'Keep the full approach, jump, and landing inside the frame.',
-  'Use a side or slight diagonal angle so the jump arc is easy to read.',
-  'Avoid shaky clips and slow pans during the jump.',
+  'Keep the full approach, jump, and landing in view.',
+  'A side or slight diagonal angle makes the jump arc easier to read.',
+  'Use a stable clip with minimal camera shake.',
+];
+
+const homeStats = [
+  { title: '3 landmarks', detail: 'Takeoff, contact, landing' },
+  { title: 'Frame-by-frame', detail: 'Precise clip control' },
+  { title: 'Vertical jump', detail: 'Dual-unit jump height: cm + inches' },
 ];
 
 const formatTime = (time: number | null) => (time === null ? '--' : `${time.toFixed(3)}s`);
+const formatJumpHeight = (cm: number, inches: number) => `${cm.toFixed(1)} cm / ${inches.toFixed(1)} in`;
 
 function App() {
   const [view, setView] = useState<View>('home');
@@ -45,16 +42,21 @@ function App() {
     hit: null,
     landing: null,
   });
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [fps, setFps] = useState(30);
 
-  // Effect to ensure video element is properly initialized when URL changes
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   useEffect(() => {
     if (videoUrl && videoRef.current) {
       videoRef.current.load();
     }
+
+    return () => {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
   }, [videoUrl]);
 
   const resetLandmarks = () => {
@@ -76,169 +78,197 @@ function App() {
     if (!video || video.readyState < 1) return;
 
     const originalTime = video.currentTime;
-    
+
     const onSeeked = () => {
       video.removeEventListener('seeked', onSeeked);
       const diff = video.currentTime - originalTime;
-      
+
       if (diff > 0 && diff < 0.15) {
         const detectedFps = 1 / diff;
         const commonRates = [24, 25, 30, 50, 60, 120, 240];
-        const snappedFps = commonRates.reduce((prev, curr) => 
-          Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev
+        const snappedFps = commonRates.reduce((prev, curr) =>
+          Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev,
         );
+
         if (snappedFps >= 24 && snappedFps <= 240) {
           setFps(snappedFps);
         }
       }
+
       video.currentTime = originalTime;
     };
 
     video.addEventListener('seeked', onSeeked);
-    // Seek 100ms - if the browser snaps, it will land on a frame boundary
     video.currentTime += 0.1;
   };
 
   const handleVideoMetadata = () => {
     const video = videoRef.current;
-    if (video) {
-      // Force seek to a tiny value to render the first frame on mobile
-      if (video.currentTime === 0) {
-        video.currentTime = 0.001;
-      }
-      detectFrameRate();
+    if (!video) return;
+
+    if (video.currentTime === 0) {
+      video.currentTime = 0.001;
     }
+
+    detectFrameRate();
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-      setFps(30); 
-      resetLandmarks();
-    }
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setVideoUrl(url);
+    setFps(30);
+    resetLandmarks();
   };
 
   const skipTime = (seconds: number) => {
     const video = videoRef.current;
-    if (video) {
-      // iOS sometimes reports readyState 0 if it hasn't buffered yet, 
-      // but we can still try to seek if the metadata is loaded
-      const current = video.currentTime;
-      const duration = video.duration;
-      let newTime = current + seconds;
-      
-      if (!isNaN(duration) && duration !== Infinity) {
-        newTime = Math.max(0, Math.min(duration, newTime));
-      } else {
-        newTime = Math.max(0, newTime);
-      }
-      
-      video.currentTime = newTime;
+    if (!video) return;
+
+    const current = video.currentTime;
+    const duration = video.duration;
+    let newTime = current + seconds;
+
+    if (!Number.isNaN(duration) && duration !== Infinity) {
+      newTime = Math.max(0, Math.min(duration, newTime));
+    } else {
+      newTime = Math.max(0, newTime);
     }
+
+    video.currentTime = newTime;
   };
 
   const skipFrame = (direction: number) => {
     const video = videoRef.current;
-    if (video) {
-      const frameDuration = (1 / fps) * 1.1; // 1.1x multiplier ensures we cross the frame threshold
-      const current = video.currentTime;
-      const duration = video.duration;
-      let newTime = current + (direction * frameDuration);
-      
-      if (!isNaN(duration) && duration !== Infinity) {
-        newTime = Math.max(0, Math.min(duration, newTime));
-      } else {
-        newTime = Math.max(0, newTime);
-      }
-      
-      video.currentTime = newTime;
+    if (!video) return;
+
+    const frameDuration = (1 / fps) * 1.1;
+    const current = video.currentTime;
+    const duration = video.duration;
+    let newTime = current + direction * frameDuration;
+
+    if (!Number.isNaN(duration) && duration !== Infinity) {
+      newTime = Math.max(0, Math.min(duration, newTime));
+    } else {
+      newTime = Math.max(0, newTime);
     }
+
+    video.currentTime = newTime;
   };
 
   const markLandmark = (type: keyof Landmarks) => {
-    if (videoRef.current) {
-      const currentTime = videoRef.current.currentTime;
-      const times = Object.values(landmarks).filter(t => t !== null);
-      if (times.includes(currentTime)) {
-        alert("Please move to a different frame to mark the next landmark.");
-        return;
-      }
-      setLandmarks(prev => ({ ...prev, [type]: currentTime }));
+    if (!videoRef.current) return;
+
+    const currentTime = videoRef.current.currentTime;
+    const times = Object.values(landmarks).filter((time): time is number => time !== null);
+
+    if (times.includes(currentTime)) {
+      alert('Please move to a different frame to mark the next landmark.');
+      return;
     }
+
+    setLandmarks((prev) => ({ ...prev, [type]: currentTime }));
   };
 
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else {
-        // iOS requires user interaction to play, this is handled by the click
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(() => {
-            // Handle auto-play prevention if needed
-          });
-        }
+    if (!videoRef.current) return;
+
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Ignore autoplay prevention errors and leave playback paused.
+        });
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
   const calculateResults = () => {
     if (landmarks.takeoff === null || landmarks.hit === null || landmarks.landing === null) return null;
-    
+
     const airtime = landmarks.landing - landmarks.takeoff;
-    const jumpHeight = (9.81 * Math.pow(airtime, 2)) / 8; // Height in meters
-    const jumpHeightCm = jumpHeight * 100; // Height in cm
+    if (airtime <= 0) return null;
+
+    const jumpHeightMeters = (9.81 * airtime * airtime) / 8;
+    const jumpHeightCm = jumpHeightMeters * 100;
+    const jumpHeightInches = jumpHeightCm / 2.54;
 
     const idealRelativeHit = airtime / 2;
     const actualRelativeHit = landmarks.hit - landmarks.takeoff;
     const diff = actualRelativeHit - idealRelativeHit;
-    
     const maxError = airtime / 2;
-    const errorRatio = Math.abs(diff) / maxError;
+    const errorRatio = maxError === 0 ? 1 : Math.abs(diff) / maxError;
     const accuracy = Math.max(0, 100 * (1 - errorRatio));
-    
-    let grade = "Needs Practice";
-    let gradeClass = "needs-practice";
-    if (accuracy >= 95) { grade = "Perfect"; gradeClass = "perfect"; }
-    else if (accuracy >= 85) { grade = "Great"; gradeClass = "great"; }
-    else if (accuracy >= 75) { grade = "Good"; gradeClass = "good"; }
 
-    return { airtime, jumpHeightCm, idealRelativeHit, actualRelativeHit, diff, accuracy, grade, gradeClass };
+    let grade = 'Needs Work';
+    let gradeClass = 'needs-practice';
+
+    if (accuracy >= 95) {
+      grade = 'Excellent';
+      gradeClass = 'perfect';
+    } else if (accuracy >= 85) {
+      grade = 'Strong';
+      gradeClass = 'great';
+    } else if (accuracy >= 75) {
+      grade = 'Solid';
+      gradeClass = 'good';
+    }
+
+    return {
+      accuracy,
+      actualRelativeHit,
+      airtime,
+      diff,
+      grade,
+      gradeClass,
+      idealRelativeHit,
+      jumpHeightCm,
+      jumpHeightInches,
+    };
   };
 
   const results = calculateResults();
   const completedLandmarks = landmarkSteps.filter(({ key }) => landmarks[key] !== null).length;
   const allLandmarksMarked = completedLandmarks === landmarkSteps.length;
+
   const statusMessage =
-    !landmarks.takeoff
-      ? 'Step 1: mark the instant your feet leave the ground.'
-      : !landmarks.hit
-        ? 'Step 2: mark the exact frame where the ball is contacted.'
-        : !landmarks.landing
-          ? 'Step 3: mark the first frame back on the ground.'
-          : 'All landmarks captured. Your report is ready.';
+    landmarks.takeoff === null
+      ? 'Step 1: find the first frame where both feet are off the floor.'
+      : landmarks.hit === null
+        ? 'Step 2: mark the frame where the hand contacts the ball.'
+        : landmarks.landing === null
+          ? 'Step 3: mark the first frame back on the floor.'
+          : 'All three landmarks are captured.';
+
+  const timingSummary = results
+    ? results.diff === 0
+      ? 'Contact was right on the ideal midpoint.'
+      : `Contact was ${results.diff > 0 ? `${results.diff.toFixed(3)}s late` : `${Math.abs(results.diff).toFixed(3)}s early`} relative to the ideal midpoint.`
+    : '';
+
   const resultMetrics = results
     ? [
         {
-          label: 'Total Airtime',
+          label: 'Airtime',
           value: `${results.airtime.toFixed(3)}s`,
-          hint: 'Time between takeoff and landing',
+          hint: 'Time from takeoff to landing',
         },
         {
-          label: 'Jump Height',
-          value: `${results.jumpHeightCm.toFixed(1)}cm`,
-          hint: 'Estimated vertical leap',
+          label: 'Vertical Jump',
+          value: formatJumpHeight(results.jumpHeightCm, results.jumpHeightInches),
+          hint: 'Estimated from total airtime',
         },
         {
-          label: 'Ideal Contact Point',
+          label: 'Ideal Contact',
           value: `${results.idealRelativeHit.toFixed(3)}s`,
           hint: 'Midpoint after takeoff',
         },
         {
-          label: 'Actual Contact Point',
+          label: 'Actual Contact',
           value: `${results.actualRelativeHit.toFixed(3)}s`,
           hint: 'Measured from takeoff',
         },
@@ -248,51 +278,23 @@ function App() {
   if (view === 'home') {
     return (
       <div className="app-shell">
-        <div className="home-grid">
-          <section className="card card--home hero-panel">
-            <p className="eyebrow">Spike timing analysis</p>
-            <h1>Professional jump timing review for every rep.</h1>
-            <p className="intro-text">
-              Upload one clip, move frame by frame, and mark the exact moments that define an explosive, well-timed spike.
-            </p>
-
-            <div className="hero-actions">
-              <button className="primary-button hero-button" onClick={() => setView('tracking')}>
-                Start Tracking
-              </button>
-            </div>
-
-            <div className="hero-stats">
-              <div className="hero-stat">
-                <strong>3 landmarks</strong>
-                <span>Takeoff, contact, landing</span>
+        <section className="card home-card">
+          <p className="eyebrow">Volleyball spike tracking</p>
+          <h1>Review each jump with a calmer workflow.</h1>
+          <div className="hero-actions">
+            <button className="primary-button hero-button" onClick={() => setView('tracking')}>
+              Start Review
+            </button>
+          </div>
+          <div className="hero-stats">
+            {homeStats.map((stat) => (
+              <div key={stat.title} className="hero-stat">
+                <strong>{stat.title}</strong>
+                <span>{stat.detail}</span>
               </div>
-              <div className="hero-stat">
-                <strong>Frame control</strong>
-                <span>Fine and coarse clip navigation</span>
-              </div>
-              <div className="hero-stat">
-                <strong>Instant report</strong>
-                <span>Accuracy, jump height, and timing</span>
-              </div>
-            </div>
-          </section>
-
-          <aside className="card card--side">
-            <p className="eyebrow eyebrow--subtle">What you get</p>
-            <div className="feature-list">
-              {homeHighlights.map((feature, index) => (
-                <div key={feature.title} className="feature-card">
-                  <span className="feature-index">{`0${index + 1}`}</span>
-                  <div>
-                    <h3>{feature.title}</h3>
-                    <p>{feature.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }
@@ -302,19 +304,20 @@ function App() {
       <div className="app-shell">
         <div className="card card--tracking">
           <div className="section-heading">
-            <p className="eyebrow">Review your jump</p>
-            <h2>Tracking Page</h2>
+            <p className="eyebrow">Clip review</p>
+            <h2>Mark the jump in three steps</h2>
             <p className="section-description">
-              Upload a clean clip, then mark takeoff, contact, and landing in sequence for a precise timing report.
+              Upload a clean spike clip, then capture takeoff, contact, and landing in order for a simple timing report.
             </p>
           </div>
+
           {!videoUrl ? (
             <div className="empty-grid">
               <section className="panel panel--upload">
                 <p className="panel-kicker">Step 1</p>
-                <h3>Bring in a clean spike clip</h3>
+                <h3>Upload a spike clip</h3>
                 <p className="panel-copy">
-                  Choose a video that shows the full jump cycle from approach through landing.
+                  Choose a video that shows the whole movement from the final step through landing.
                 </p>
                 <div className="upload-section">
                   <input
@@ -325,14 +328,14 @@ function App() {
                     className="visually-hidden"
                   />
                   <label htmlFor="video-upload" className="upload-trigger">
-                    <Upload size={20} /> Upload Video
+                    <Upload size={20} /> Choose Video
                   </label>
                 </div>
               </section>
 
               <section className="panel">
-                <p className="panel-kicker">Best results</p>
-                <h3>Capture a readable angle</h3>
+                <p className="panel-kicker">Clip tips</p>
+                <h3>Make the jump easy to read</h3>
                 <ul className="tip-list">
                   {uploadTips.map((tip) => (
                     <li key={tip}>{tip}</li>
@@ -345,8 +348,7 @@ function App() {
               <section className="panel stage-panel">
                 <div className="panel-header panel-header--spread">
                   <div>
-                    <p className="panel-kicker">Video review</p>
-                    <h3>Playback canvas</h3>
+                    <h3>Playback</h3>
                   </div>
                   <span className={`live-pill ${isPlaying ? 'live-pill--active' : ''}`}>
                     {isPlaying ? 'Playing' : 'Paused'}
@@ -374,20 +376,21 @@ function App() {
                     <Activity size={14} />
                     <span>{fps} FPS</span>
                   </div>
-                  <span>{allLandmarksMarked ? 'Ready for analysis' : `${completedLandmarks}/3 landmarks captured`}</span>
+                  <span>{allLandmarksMarked ? 'Ready to analyze' : `${completedLandmarks}/3 landmarks captured`}</span>
                 </div>
               </section>
 
               <aside className="tracking-sidebar">
                 <section className="panel">
-                  <p className="panel-kicker">Playback controls</p>
-                  <div className="panel-header--spread">
-                    <h3>Navigation</h3>
-                    <select 
-                      className="fps-select" 
-                      value={fps} 
+                  <div className="panel-header panel-header--spread">
+                    <div>
+                      <h3>Frame Selection</h3>
+                    </div>
+                    <select
+                      className="fps-select"
+                      value={fps}
                       onChange={(e) => setFps(Number(e.target.value))}
-                      title="Set video framerate for frame-by-frame control"
+                      title="Set the frame rate used for frame-by-frame stepping"
                     >
                       <option value={24}>24 FPS</option>
                       <option value={30}>30 FPS</option>
@@ -396,41 +399,41 @@ function App() {
                       <option value={240}>240 FPS</option>
                     </select>
                   </div>
+
                   <div className="button-group transport-controls">
-                    <button onClick={() => skipTime(-0.2)} title="-0.2s">
-                      <Rewind size={20} /> -0.2s
+                    <button onClick={() => skipTime(-0.2)} title="Back 0.2 seconds">
+                      <Rewind size={18} /> -0.2s
                     </button>
-                    <button onClick={() => skipFrame(-1)} title="-1 frame">
-                      <ChevronLeft size={20} /> -1 Frame
+                    <button onClick={() => skipFrame(-1)} title="Back 1 frame">
+                      <ChevronLeft size={18} /> -1 frame
                     </button>
-                    <button onClick={togglePlay} className="accent-button">
+                    <button onClick={togglePlay} className="accent-button" title="Play or pause">
                       {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                      {isPlaying ? 'Pause' : 'Play'}
                     </button>
-                    <button onClick={() => skipFrame(1)} title="+1 frame">
-                      <ChevronRight size={20} /> +1 Frame
+                    <button onClick={() => skipFrame(1)} title="Forward 1 frame">
+                      <ChevronRight size={18} /> +1 frame
                     </button>
-                    <button onClick={() => skipTime(0.2)} title="+0.2s">
-                      <FastForward size={20} /> +0.2s
+                    <button onClick={() => skipTime(0.2)} title="Forward 0.2 seconds">
+                      <FastForward size={18} /> +0.2s
                     </button>
                   </div>
                 </section>
 
-                <section className="panel panel--mark">
-                  <p className="panel-kicker">Landmark capture</p>
-                  <h3>Mark the current frame</h3>
+                <section className="panel panel--compact">
                   <div className="status-message">{statusMessage}</div>
 
                   <div className="button-group mark-controls">
                     <button
                       className="tap-button"
                       onClick={() => {
-                        if (!landmarks.takeoff) markLandmark('takeoff');
-                        else if (!landmarks.hit) markLandmark('hit');
-                        else if (!landmarks.landing) markLandmark('landing');
+                        if (landmarks.takeoff === null) markLandmark('takeoff');
+                        else if (landmarks.hit === null) markLandmark('hit');
+                        else if (landmarks.landing === null) markLandmark('landing');
                       }}
                       disabled={allLandmarksMarked}
                     >
-                      Tap
+                      Mark Current Frame
                     </button>
                     <button
                       className="secondary-button undo-button"
@@ -441,23 +444,17 @@ function App() {
                     </button>
                   </div>
 
-                  <p className="panel-note">
-                    Use the frame controls until the action matches the prompt above, then capture the moment with one tap.
-                  </p>
-                </section>
-
-                <section className="panel">
-                  <p className="panel-kicker">Captured timeline</p>
-                  <h3>Current landmarks</h3>
-                  <div className="landmark-grid">
+                  <div className="landmark-list">
                     {landmarkSteps.map((step) => (
                       <div
                         key={step.key}
-                        className={`landmark-card ${landmarks[step.key] !== null ? 'landmark-card--filled' : ''}`}
+                        className={`landmark-row ${landmarks[step.key] !== null ? 'landmark-row--filled' : ''}`}
                       >
-                        <span className="landmark-label">{step.label}</span>
+                        <div className="landmark-copy">
+                          <span className="landmark-label">{step.label}</span>
+                          <span className="landmark-hint">{step.hint}</span>
+                        </div>
                         <strong>{formatTime(landmarks[step.key])}</strong>
-                        <span className="landmark-hint">{step.hint}</span>
                       </div>
                     ))}
                   </div>
@@ -469,7 +466,7 @@ function App() {
                     onClick={() => setView('results')}
                     disabled={!allLandmarksMarked}
                   >
-                    Analyze
+                    Analyze Jump
                   </button>
                   <button
                     className="secondary-button"
@@ -478,7 +475,7 @@ function App() {
                       resetLandmarks();
                     }}
                   >
-                    Upload New Video
+                    Upload Another Video
                   </button>
                 </div>
               </aside>
@@ -495,13 +492,9 @@ function App() {
         <div className="card card--results">
           <div className="results-header">
             <div className="results-summary">
-              <p className="eyebrow">Timing report</p>
-              <div className={`grade-banner ${results.gradeClass}`}>
-                {results.grade}
-              </div>
-              <div className="difference-text">
-                {results.diff > 0 ? `+${results.diff.toFixed(3)}s` : `${results.diff.toFixed(3)}s`} from ideal
-              </div>
+              <p className="eyebrow">Jump report</p>
+              <h2 className={`results-grade ${results.gradeClass}`}>{results.grade}</h2>
+              <p className="results-subtitle">{timingSummary}</p>
             </div>
 
             <div className="accuracy-orb">
@@ -522,7 +515,7 @@ function App() {
             </div>
 
             <div className="results-note">
-              The ideal strike point sits halfway between takeoff and landing. Smaller offsets mean cleaner timing.
+              The ideal contact point sits halfway between takeoff and landing. Smaller timing offsets usually mean cleaner spike timing.
             </div>
           </div>
 
@@ -534,7 +527,7 @@ function App() {
                 setView('tracking');
               }}
             >
-              <RotateCcw size={20} /> Try Again
+              <RotateCcw size={20} /> Mark Again
             </button>
             <button
               className="primary-button"
@@ -544,7 +537,7 @@ function App() {
                 resetLandmarks();
               }}
             >
-              <Upload size={20} /> Upload New Video
+              <Upload size={20} /> New Video
             </button>
           </div>
         </div>
